@@ -58,7 +58,7 @@ jobs:
         sha256sum ${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}* > ${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}-checksums.txt
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}
         path: |
