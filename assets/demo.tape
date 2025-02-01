@@ -1,3 +1,4 @@
+# Trigger Comment: 1
 Output demo.gif
 
 Set FontSize 24
@@ -27,3 +28,4 @@ Enter
 
 # Admire the output for a bit.
 Sleep 15s
+
