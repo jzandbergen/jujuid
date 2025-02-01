@@ -14,6 +14,12 @@ import (
 	"github.com/go-faker/faker/v4"
 )
 
+var (
+	Version   string
+	BuildDate string
+	Commit    string
+)
+
 // id:name
 type uuidMap map[string]string
 

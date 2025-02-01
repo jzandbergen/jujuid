@@ -1,0 +1,93 @@
+name: Build and Release Go Binary
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags
+
+permissions:
+  contents: write # Allow writing releases
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Build for multiple platforms
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+        exclude:
+          # Exclude unsupported combinations
+          - goos: windows
+            goarch: arm64
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21' # Use the appropriate Go version
+        cache: false
+
+    - name: Get dependencies
+      run: |
+        go mod download
+        go mod verify
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        OUTPUT_NAME=${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}
+        if [ "${{ matrix.goos }}" == "windows" ]; then
+          OUTPUT_NAME+=".exe"
+        fi
+        go build -v -o dist/$OUTPUT_NAME \
+          -ldflags="-s -w \
+          -X 'main.Version=${{ github.ref_name }}' \
+          -X 'main.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')' \
+          -X 'main.Commit=${{ github.sha }}'"
+
+    - name: Create checksum
+      working-directory: dist
+      run: |
+        sha256sum ${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}* > ${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}-checksums.txt
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}
+        path: |
+          dist/${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}*
+        retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: dist
+
+    - name: Generate release notes
+      run: |
+        # You can customize this to generate more detailed release notes
+        echo "## Changelog" > release_notes.md
+        echo "- Automated release of version ${{ github.ref_name }}" >> release_notes.md
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/**/${{ github.event.repository.name }}-*
+        body_path: release_notes.md
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
