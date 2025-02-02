@@ -9,7 +9,7 @@ memorable, human-readable identifiers.
 
 ### Fosdem is a wrap 🏁
 
-That marks the KFC release!! 🐔 v0.1.0-kfc 
+That marks the KFC release!! 🐔 v0.1.1-kfc 
 
 #### What is jujuid?
 
