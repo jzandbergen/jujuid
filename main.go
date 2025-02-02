@@ -17,10 +17,12 @@ import (
 	"github.com/go-faker/faker/v4"
 )
 
-var db *statedb.DB
-var uuidTable statedb.RWTable[*uuidMapV2]
-
 var (
+	db            *statedb.DB
+	uuidTable     statedb.RWTable[*UUIDNamePair]
+	providedFlags parameterFlags
+	currentGender gender
+
 	Version   string
 	BuildDate string
 	Commit    string
@@ -45,17 +47,15 @@ const (
 	Dark   = "\033[90m" // Dark gray
 )
 
-type uuidMap map[string]string
-
-type uuidMapV2 struct {
+type UUIDNamePair struct {
 	ID   string
 	Name string
 }
 
 // Define how to index and query the object.
-var UUIDIndex = statedb.Index[*uuidMapV2, string]{
+var UUIDIndex = statedb.Index[*UUIDNamePair, string]{
 	Name: "id",
-	FromObject: func(obj *uuidMapV2) index.KeySet {
+	FromObject: func(obj *UUIDNamePair) index.KeySet {
 		return index.NewKeySet(index.String(obj.ID))
 	},
 	FromKey: func(id string) index.Key {
@@ -64,9 +64,18 @@ var UUIDIndex = statedb.Index[*uuidMapV2, string]{
 	Unique: true,
 }
 
-var thisMap = make(uuidMap, 32)
+var NameIndex = statedb.Index[*UUIDNamePair, string]{
+	Name: "name",
+	FromObject: func(obj *UUIDNamePair) index.KeySet {
+		return index.NewKeySet(index.String(obj.Name))
+	},
+	FromKey: func(name string) index.Key {
+		return index.String(name)
+	},
+	Unique: true,
+}
 
-type nameConfig struct {
+type parameterFlags struct {
 	gender      string
 	useTitle    bool
 	useFirst    bool
@@ -76,17 +85,14 @@ type nameConfig struct {
 	showVersion bool
 }
 
-var config nameConfig
-var currentGender gender
-
 func init() {
-	flag.StringVar(&config.gender, "gender", "both", "Gender for name generation (male/female/both)")
-	flag.BoolVar(&config.useTitle, "title", false, "Include title in name")
-	flag.BoolVar(&config.useFirst, "first", true, "Include first name")
-	flag.BoolVar(&config.useLast, "last", true, "Include last name")
-	flag.StringVar(&config.formatStr, "format", "[%s]", "Format string for the name output")
-	flag.BoolVar(&config.color, "color", true, "Use colors")
-	flag.BoolVar(&config.showVersion, "version", false, "Print version information")
+	flag.StringVar(&providedFlags.gender, "gender", "both", "Gender for name generation (male/female/both)")
+	flag.BoolVar(&providedFlags.useTitle, "title", false, "Include title in name")
+	flag.BoolVar(&providedFlags.useFirst, "first", true, "Include first name")
+	flag.BoolVar(&providedFlags.useLast, "last", true, "Include last name")
+	flag.StringVar(&providedFlags.formatStr, "format", "[%s]", "Format string for the name output")
+	flag.BoolVar(&providedFlags.color, "color", true, "Use colors")
+	flag.BoolVar(&providedFlags.showVersion, "version", false, "Print version information")
 
 	createDatabase()
 }
@@ -97,24 +103,13 @@ func printVersion() {
 	fmt.Printf("Commit: %s\n", Commit)
 }
 
-func (m uuidMap) Run(s string) (string, error) {
-	for uuid, name := range m {
-		if config.color {
-			s = strings.ReplaceAll(s, uuid, Dark+name+Reset)
-		} else {
-			s = strings.ReplaceAll(s, uuid, name)
-		}
-	}
-	return s, nil
-}
-
 func generateName() string {
 	var parts []string
-	if config.gender == "both" {
+	if providedFlags.gender == "both" {
 		currentGender = !currentGender
 	}
 
-	if config.useTitle {
+	if providedFlags.useTitle {
 		if currentGender == female {
 			parts = append(parts, faker.TitleFemale())
 		} else {
@@ -122,7 +117,7 @@ func generateName() string {
 		}
 	}
 
-	if config.useFirst {
+	if providedFlags.useFirst {
 		if currentGender == female {
 			parts = append(parts, faker.FirstNameFemale())
 		} else {
@@ -130,16 +125,16 @@ func generateName() string {
 		}
 	}
 
-	if config.useLast {
+	if providedFlags.useLast {
 		parts = append(parts, faker.LastName())
 	}
 
-	return fmt.Sprintf(config.formatStr, strings.Join(parts, " "))
+	return fmt.Sprintf(providedFlags.formatStr, strings.Join(parts, " "))
 }
 
 func main() {
 	flag.Parse()
-	switch config.gender {
+	switch providedFlags.gender {
 	case "male":
 		currentGender = male
 	case "female":
@@ -148,7 +143,7 @@ func main() {
 		currentGender = female
 	}
 
-	if config.showVersion {
+	if providedFlags.showVersion {
 		printVersion()
 		os.Exit(0)
 	}
@@ -200,36 +195,53 @@ func processLine(l string) (result string, err error) {
 	uuids := pattern.FindAllString(l, -1)
 	for _, uuid := range uuids {
 		if _, ok := fetchByUUID(uuid); !ok {
-			name := generateName()
+			var name string
+			var exitCounter int
+			for {
+				name = generateName()
+				_, ok := fetchByName(name)
+				if ok {
+					exitCounter++
+					if exitCounter > 1000 {
+						log.Fatal("Could not generate a random name in 1000 loops. Out of names...")
+					}
+					continue
+				}
+				break
+			}
 			storeInDb(name, uuid)
 		}
 	}
 
-	// TODO justin je bent hier! hij doet wel store & search maar je runt nog iets
-	// leegs van die oude map[string]string.
 	return Run(l)
-	// return thisMap.Run(l)
 }
 
-func fetchByUUID(uuid string) (obj *uuidMapV2, ok bool) {
+func fetchByUUID(uuid string) (obj *UUIDNamePair, ok bool) {
 	txn := db.ReadTxn()
 	obj, _, ok = uuidTable.Get(txn, UUIDIndex.Query(uuid))
+	return obj, ok
+}
+
+func fetchByName(name string) (obj *UUIDNamePair, ok bool) {
+	txn := db.ReadTxn()
+	obj, _, ok = uuidTable.Get(txn, NameIndex.Query(name))
 	return obj, ok
 }
 
 func storeInDb(name, uuid string) {
 	// commit in a transaction to stateDB
 	wtxn := db.WriteTxn(uuidTable)
-	uuidTable.Insert(wtxn, &uuidMapV2{uuid, name})
+	if _, _, err := uuidTable.Insert(wtxn, &UUIDNamePair{uuid, name}); err != nil {
+		log.Fatal(err)
+	}
 	wtxn.Commit()
-
 }
 
 func Run(s string) (string, error) {
 	// Iterate over all objects
 	txn := db.ReadTxn()
 	for obj := range uuidTable.All(txn) {
-		if config.color {
+		if providedFlags.color {
 			s = strings.ReplaceAll(s, obj.ID, Dark+obj.Name+Reset)
 		} else {
 			s = strings.ReplaceAll(s, obj.ID, obj.Name)
@@ -245,6 +257,7 @@ func createDatabase() {
 	uuidTable, err = statedb.NewTable(
 		"uuid_and_users",
 		UUIDIndex,
+		NameIndex,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -253,54 +266,4 @@ func createDatabase() {
 	if err := db.RegisterTable(uuidTable); err != nil {
 		log.Fatal(err)
 	}
-
-	/* in the functhingie
-	wtxn := db.WriteTxn(uuidTable)
-
-	// Insert some objects
-	myObjects.Insert(wtxn, &MyObject{1, "a"})
-	myObjects.Insert(wtxn, &MyObject{2, "b"})
-	myObjects.Insert(wtxn, &MyObject{3, "c"})
-
-
-	if feelingLucky {
-	  // Commit the changes.
-	  wtxn.Commit()
-	}
-	*/
-
-	/*
-	  // Query the objects with a snapshot of the database.
-	  txn := db.ReadTxn()
-
-	  if obj, _, found := myObjects.Get(txn, IDIndex.Query(1)); found {
-	    ...
-	  }
-
-	  // Iterate over all objects
-	  for obj := range myObjects.All() {
-	    ...
-	  }
-
-	  // Iterate with revision
-	  for obj, revision := range myObjects.All() {
-	    ...
-	  }
-
-	  // Iterate all objects and then wait until something changes.
-	  objs, watch := myObjects.AllWatch(txn)
-	  for obj := range objs { ... }
-	  <-watch
-
-	  // Grab a new snapshot to read the new changes.
-	  txn = db.ReadTxn()
-
-	  // Iterate objects with ID >= 2
-	  objs, watch = myObjects.LowerBoundWatch(txn, IDIndex.Query(2))
-	  for obj := range objs { ... }
-
-	  // Iterate objects where ID is between 0x1000_0000 and 0x1fff_ffff
-	  objs, watch = myObjects.PrefixWatch(txn, IDIndex.Query(0x1000_0000))
-	  for obj := range objs { ... }
-	*/
 }
