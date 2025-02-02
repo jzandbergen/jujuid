@@ -63,6 +63,11 @@ jobs:
         name: ${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}
         path: |
           dist/${{ github.event.repository.name }}-${{ matrix.goos }}-${{matrix.goarch }}*
+    - name: Trigger Workflow
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        event-type: vhs
         retention-days: 1
 
   release:
