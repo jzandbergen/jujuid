@@ -20,7 +20,7 @@ Sleep 5s
 Enter
 Enter
 
-Type "cat ./assets/testdata.txt | ./jujuid"
+Type "cat ./assets/testdata.txt | jujuid"
 Sleep 500ms
 
 # Run the command by pressing enter.
