@@ -5,6 +5,8 @@
 jujuid is a playful UUID-to-Name translator that transforms boring UUIDs into
 memorable, human-readable identifiers.
 
+![Demo](./assets/demo.gif)
+
 ### 🚧 MVP Status: Hacking in Progress 🚧
 
 #### What is jujuid?
@@ -25,6 +27,7 @@ system traces more readable and fun!
 ```bash
 echo "Processing request from b56d2ce4-484d-49bb-89cb-da4517df6c66" | ./jujuid
 # Output: Processing request from [UUID: Mr John Smith]
+```
 
 ### Getting Started
 
