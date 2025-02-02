@@ -1,4 +1,4 @@
-# Trigger Comment: 1
+# Trigger Comment: 2
 Output assets/demo.gif
 
 Set FontSize 24
