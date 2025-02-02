@@ -7,7 +7,9 @@ memorable, human-readable identifiers.
 
 ![Demo](./assets/demo.gif)
 
-### 🚧 MVP Status: Hacking in Progress 🚧
+### Fosdem is a wrap 🏁
+
+That marks the KFC release!! 🐔 v0.1.0-kfc 
 
 #### What is jujuid?
 
