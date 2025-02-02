@@ -3,6 +3,10 @@ on:
   push:
     paths:
       - assets/demo.tape
+
+permissions:
+  contents: write # Allow writing releases
+
 jobs:
   vhs:
     runs-on: ubuntu-latest
@@ -11,8 +15,6 @@ jobs:
       - uses: charmbracelet/vhs-action@v2
         with:
           path: 'assets/demo.tape'
-      - name: Move to directory
-        run: mv demo.gif assets/
       - uses: stefanzweifel/git-auto-commit-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

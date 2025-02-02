@@ -1,12 +1,12 @@
 # Trigger Comment: 1
-Output demo.gif
+Output assets/demo.gif
 
 Set FontSize 24
 Set Width 1200
 Set Height 600
 
 Hide
-Type 'export PS1="> "'
+Type 'export PS1="[thegibson]> "'
 Enter
 Type clear
 Enter
